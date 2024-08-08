@@ -1,9 +1,9 @@
 import os
-from typing import List
+from typing import List, Dict
 from collections import OrderedDict
 
 
-def parse_htr_selex_dir(root_path: str) -> List[List[str]]:
+def parse_htr_selex_dir(root_path: str) -> List[Dict[int, str]]:
     res = dict()
     for file_path in os.listdir(root_path):
         file_name = os.path.splitext(file_path)[0] # remove extension
@@ -14,19 +14,26 @@ def parse_htr_selex_dir(root_path: str) -> List[List[str]]:
             res[rbp_index] = dict()
         res[rbp_index][rbp_cycle_index] = os.path.join(root_path, file_path)
     res = OrderedDict(sorted(res.items()))
-    for key, val in res.items():
-            res[key] = list(OrderedDict(sorted(val.items())).values())
     return list(res.values())
 
 
-def parse_RNAcompete_intensities_dir(root_path: str) -> List[List[str]]:
+def parse_RNAcompete_intensities_dir(root_path: str) -> List[str]:
     res = dict()
     for file_path in os.listdir(root_path):
         file_name = os.path.splitext(file_path)[0] # remove extension
         rbp_index = int(file_name[3:])
-        res[rbp_index] = os.path.join(root_path, file_path)
+        res[rbp_index] = file_name# os.path.join(root_path, file_path)
     res = list(OrderedDict(sorted(res.items())).values())
     return res
+
+
+def read_htr_selex_cycle(cycle_path) -> List[str]:
+    with open(cycle_path, 'r') as f:
+        all_text = f.read().split('\n')
+    res = [line.split(',')[0] for line in all_text]
+    res = list(filter(len, res))
+    return res
+
 
 if __name__ == '__main__':
     htr_selex_path = r'C:\Users\eli.dagi\OneDrive - AU10TIX\Documents\Courses\year 2\b\Deep for biological data\Project\data\htr-selex'
