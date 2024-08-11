@@ -23,6 +23,18 @@ class HtrSelexDataset(Dataset):
     def __getitem__(self, index) -> T_co:
         return self.x[index], self.y[index]
 
+    @property
+    def cycles(self):
+        return self._cycles
+
+    @cycles.setter
+    def cycles(self, value):
+        self._cycles = value
+
+    @property
+    def num_cycles(self):
+        return len(self.cycles)
+
 
 if __name__ == '__main__':
     htr_selex_path = r'C:\Users\eli.dagi\OneDrive - AU10TIX\Documents\Courses\year 2\b\Deep for biological data\Project\data\htr-selex'
