@@ -2,6 +2,14 @@ import os
 from typing import List, Dict
 from collections import OrderedDict
 
+import numpy as np
+from torch.utils.data import Dataset, random_split, DataLoader
+from torch.optim import Adam
+from rbp_models import RbpEncoder, RbpClassifier, RbpOrdinalClassifier, RbpPredictor, RbpOrdinalPredictor
+import torch
+import torch.nn as nn
+import yaml
+
 
 def parse_htr_selex_dir(root_path: str) -> List[Dict[int, str]]:
     res = dict()
@@ -17,12 +25,12 @@ def parse_htr_selex_dir(root_path: str) -> List[Dict[int, str]]:
     return list(res.values())
 
 
-def parse_RNAcompete_intensities_dir(root_path: str) -> List[str]:
+def parse_RNAcompete_intensities_dir(root_path: str) -> List[np.ndarray]:
     res = dict()
     for file_path in os.listdir(root_path):
-        file_name = os.path.splitext(file_path)[0] # remove extension
+        file_name = os.path.splitext(file_path)[0]  # remove extension
         rbp_index = int(file_name[3:])
-        res[rbp_index] = file_name# os.path.join(root_path, file_path)
+        res[rbp_index] = np.loadtxt(os.path.join(root_path, file_path))
     res = list(OrderedDict(sorted(res.items())).values())
     return res
 
@@ -34,6 +42,71 @@ def read_htr_selex_cycle(cycle_path) -> List[str]:
     res = list(filter(len, res))
     return res
 
+
+def create_model(cfg, dataset, device):
+    embed_dim = cfg['embed_dim']
+    kernel_size = cfg['kernel_size']
+    num_kernels = cfg['num_kernels']
+    encoder = RbpEncoder(41, embed_dim=embed_dim, kernel_size=kernel_size, num_kernels=num_kernels, device=device)
+    if dataset.num_cycles > 1:
+        model = RbpClassifier(encoder=encoder, encoder_dim=embed_dim, num_class=dataset.num_cycles)
+        criterion = nn.BCEWithLogitsLoss()
+    else:
+        model = RbpVAE(encoder=encoder, encoder_dim=embed_dim)
+        criterion =
+    return model.to(device), criterion
+
+
+def create_loaders(cfg, dataset: Dataset):
+    dataset_len = len(dataset)
+    val_ratio = cfg['val_ratio']
+    val_len = int(dataset_len * (1 - val_ratio))
+    train_len = dataset_len - val_len
+    train_dataset, val_datasets = random_split(dataset, [train_len, val_len])
+    train_loader = DataLoader(train_dataset, cfg['batch_size'], shuffle=True)
+    val_loader = DataLoader(val_datasets, cfg['batch_size'], shuffle=True)
+    return {'train': train_loader,
+            'val': val_loader}
+
+
+def read_rna_compete_rna_list(path: str) -> List[str]:
+    with open(path, 'r') as f:
+        rna_sequences = f.read().split('\n')
+    return rna_sequences
+def get_device(cfg):
+    user_device = cfg['device']
+    if user_device:
+        device = torch.device(user_device)
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    return device
+
+
+def read_cfg(cfg_path):
+    with open(cfg_path, 'r') as f:
+        cfg = yaml.safe_load(f)
+    return cfg
+
+
+def create_optimizer(cfg, model):
+    optimizer = Adam(model.parameters(), lr=cfg['learning_rate'])
+    return optimizer
+
+
+def create_predictor(num_classes, model, loaders) -> RbpPredictor:
+    predictor = None
+    if num_classes > 1:
+        predictor = RbpOrdinalPredictor(model)
+    return predictor
+
+
+def dataset_to_loader(dataset: Dataset, cfg: Dict, **kwargs) -> DataLoader:
+    return DataLoader(dataset=dataset, batch_size=cfg['batch_size'], **kwargs)
+
+
+def pearson_correlation(a, b):
+    correlation_matrix = np.corrcoef(a, b)
+    return correlation_matrix[0, 1]
 
 if __name__ == '__main__':
     htr_selex_path = r'C:\Users\eli.dagi\OneDrive - AU10TIX\Documents\Courses\year 2\b\Deep for biological data\Project\data\htr-selex'
