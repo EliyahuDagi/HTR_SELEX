@@ -36,11 +36,11 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=10,
             for inputs, labels in pbar:
                 pbar.set_postfix_str(f'{phase}: Loss=>{running_loss / count}')
                 inputs = inputs.to(device)
-                # if phase == 'train':
-                #     random_cols = torch.randint(0, inputs.size(1), (inputs.size(0),))
-                #     mask = torch.zeros(inputs.size(), dtype=torch.bool)
-                #     mask[torch.arange(inputs.size(0)), random_cols] = True
-                #     inputs[mask] = 0
+                if phase == 'train':
+                    random_cols = torch.randint(0, inputs.size(1), (inputs.size(0),))
+                    mask = torch.zeros(inputs.size(), dtype=torch.bool)
+                    mask[torch.arange(inputs.size(0)), random_cols] = True
+                    inputs[mask] = torch.randint(1, 5, (inputs.size(0), 1)).squeeze().to(inputs.device)
                 labels = labels.to(device)
                 # zero the parameter gradients
                 optimizer.zero_grad()

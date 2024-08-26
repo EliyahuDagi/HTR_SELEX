@@ -253,9 +253,9 @@ class RbpClassifier(Module):
     def __init__(self, encoder, encoder_dim, num_classes):
         super().__init__()
         self.encoder = encoder
-        self.class_head = nn.Linear(encoder_dim, num_classes)
+        self.class_head = nn.Linear(encoder_dim, 1)
         self.activation = nn.Identity()
-        self.num_classes = num_classes
+        self.num_classes = 1
 
     def forward(self, x):
         features = self.encoder(x)
@@ -267,11 +267,11 @@ class RbpClassifier(Module):
 class RbpClassifierLoss(Module):
     def __init__(self):
         super().__init__()
-        self.bce = nn.CrossEntropyLoss()
+        self.bce = nn.BCEWithLogitsLoss()
 
     def forward(self, input, target):
-        target = (target > 0).to(torch.float32)
-        return self.bce(input.squeeze(-1), target - 1)
+        target = (target > 1).to(torch.float32)
+        return self.bce(input.squeeze(-1), target)
 
 
 class RbpClassifierPredictor(RbpPredictor):
@@ -283,12 +283,12 @@ class RbpClassifierPredictor(RbpPredictor):
         # max_index = np.argmax(model_out, axis=-1)
         # max_conf = model_out[np.arange(0, model_out.shape[0]), max_index]
         # res = max_conf * (max_index + 1)
-        # return res
-        return np.dot(model_out, self.scores)
+        return model_out
+        # return np.dot(model_out, self.scores)
 
     def model_output(self, encoded_rna: torch.Tensor):
         with torch.no_grad():
-            model_out = F.softmax(self.model(encoded_rna), dim=-1)
+            model_out = F.sigmoid(self.model(encoded_rna))
         model_out = model_out.cpu().numpy()
         return model_out
 
