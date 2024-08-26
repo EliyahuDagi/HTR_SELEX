@@ -5,8 +5,13 @@ from collections import OrderedDict
 import numpy as np
 from torch.utils.data import Dataset, random_split, DataLoader
 from torch.optim import Adam
-from rbp_models import RbpEncoder, RbpClassifier, RbpOrdinalClassifier, RbpPredictor, RbpOrdinalPredictor
+from rbp_models import RbpEncoder, RbpPredictor, \
+    RbpClassifier, RbpClassifierLoss, RbpClassifierPredictor,\
+    RbpOrdinalClassifier, OrdinalLoss, RbpOrdinalPredictor, \
+    RbpVAE, VAELoss, TypicalityPredictor, MeanVarianceLoss, \
+    GatedLoss, GatedPredictor
 import torch
+from sam import SAM
 import torch.nn as nn
 import yaml
 
@@ -46,15 +51,32 @@ def read_htr_selex_cycle(cycle_path) -> List[str]:
 def create_model(cfg, dataset, device):
     embed_dim = cfg['embed_dim']
     kernel_size = cfg['kernel_size']
-    num_kernels = cfg['num_kernels']
-    encoder = RbpEncoder(41, embed_dim=embed_dim, kernel_size=kernel_size, num_kernels=num_kernels, device=device)
+    num_kernels = cfg['feature_dim']
     if dataset.num_cycles > 1:
-        model = RbpClassifier(encoder=encoder, encoder_dim=embed_dim, num_class=dataset.num_cycles)
-        criterion = nn.BCEWithLogitsLoss()
+        encoder = RbpEncoder(41, embed_dim=embed_dim, kernel_size=kernel_size, num_kernels=num_kernels, device=device)
+        # model = RbpOrdinalClassifier(encoder=encoder, encoder_dim=num_kernels, num_class=dataset.num_cycles)
+        # criterion = OrdinalLoss()
+        # model = RbpGatedClassifier(41, embed_dim, feature_dim=num_kernels, num_classes=2)
+        # encoder = RbpEncoder(41, embed_dim=embed_dim, kernel_size=kernel_size, num_kernels=num_kernels, device=device)
+        model = RbpClassifier(encoder=encoder, encoder_dim=num_kernels, num_classes=dataset.num_cycles)
+        criterion = RbpClassifierLoss()
+        # criterion = GatedLoss(main_loss=criterion)
     else:
-        model = RbpVAE(encoder=encoder, encoder_dim=embed_dim)
-        criterion =
+        encoder = RbpEncoder(41, embed_dim=embed_dim, kernel_size=kernel_size, num_kernels=num_kernels, device=device)
+        model = RbpVAE(encoder=encoder, encoder_dim=num_kernels)
+        criterion = VAELoss()
     return model.to(device), criterion
+
+
+def create_predictor(num_classes, model, loaders, device) -> RbpPredictor:
+    predictor = None
+    if num_classes > 1:
+        # predictor = RbpOrdinalPredictor(model)
+        predictor = RbpClassifierPredictor(model)
+        # predictor = GatedPredictor(predictor)
+    else:
+        predictor = TypicalityPredictor(model, train_loader=loaders['train'], device=device)
+    return predictor
 
 
 def create_loaders(cfg, dataset: Dataset):
@@ -64,7 +86,7 @@ def create_loaders(cfg, dataset: Dataset):
     train_len = dataset_len - val_len
     train_dataset, val_datasets = random_split(dataset, [train_len, val_len])
     train_loader = DataLoader(train_dataset, cfg['batch_size'], shuffle=True)
-    val_loader = DataLoader(val_datasets, cfg['batch_size'], shuffle=True)
+    val_loader = DataLoader(val_datasets, cfg['batch_size'] * 2, shuffle=False)
     return {'train': train_loader,
             'val': val_loader}
 
@@ -73,6 +95,8 @@ def read_rna_compete_rna_list(path: str) -> List[str]:
     with open(path, 'r') as f:
         rna_sequences = f.read().split('\n')
     return rna_sequences
+
+
 def get_device(cfg):
     user_device = cfg['device']
     if user_device:
@@ -89,15 +113,12 @@ def read_cfg(cfg_path):
 
 
 def create_optimizer(cfg, model):
-    optimizer = Adam(model.parameters(), lr=cfg['learning_rate'])
+    if cfg['optimizer'] == 'sam':
+        base_optimizer = torch.optim.SGD  # define an optimizer for the "sharpness-aware" update
+        optimizer = SAM(model.parameters(), base_optimizer, lr=cfg['learning_rate'], momentum=0.9)
+    else:
+        optimizer = Adam(model.parameters(), lr=cfg['learning_rate'])
     return optimizer
-
-
-def create_predictor(num_classes, model, loaders) -> RbpPredictor:
-    predictor = None
-    if num_classes > 1:
-        predictor = RbpOrdinalPredictor(model)
-    return predictor
 
 
 def dataset_to_loader(dataset: Dataset, cfg: Dict, **kwargs) -> DataLoader:
@@ -107,6 +128,7 @@ def dataset_to_loader(dataset: Dataset, cfg: Dict, **kwargs) -> DataLoader:
 def pearson_correlation(a, b):
     correlation_matrix = np.corrcoef(a, b)
     return correlation_matrix[0, 1]
+
 
 if __name__ == '__main__':
     htr_selex_path = r'C:\Users\eli.dagi\OneDrive - AU10TIX\Documents\Courses\year 2\b\Deep for biological data\Project\data\htr-selex'

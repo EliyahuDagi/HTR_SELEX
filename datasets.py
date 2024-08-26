@@ -3,13 +3,13 @@ from torch.utils.data import Dataset
 from typing import Dict, Union, List
 import torch
 from torch.utils.data.dataset import T_co
-
+import random
 from utils import parse_htr_selex_dir, read_htr_selex_cycle, read_rna_compete_rna_list
 
 
 class RnaEncoder:
     def __init__(self):
-        self.rna_char2class_map = dict(zip(list('PNACGT'), list(range(6))))  # 'Add P for padding'
+        self.rna_char2class_map = dict(zip(list('NACGT'), list(range(5))))  # 'Add N for padding and unknown'
         self.max_len = 41
 
     def pad(self, rna):
@@ -18,12 +18,14 @@ class RnaEncoder:
         if len(rna) == self.max_len:
             return rna
         pad_len = self.max_len - len(rna)
-        pad_before = pad_len // 2
-        pad_after = pad_len - pad_before
-        return 'P' * pad_before + rna + 'P' * pad_after
+        # pad_before = pad_len // 2
+        # pad_after = pad_len - pad_before
+        # return 'P' * pad_before + rna + 'P' * pad_after
+        return rna + 'N' * pad_len
 
     def encode_single_unit(self, single_unit):
         return self.rna_char2class_map[single_unit]
+
     def encode_rna(self, rna):
         padded = self.pad(rna)
         encoded = [self.encode_single_unit(char) for char in padded]
@@ -39,24 +41,41 @@ class HtrSelexDataset(Dataset):
         self.cycles = []
         # self.pad_data = self.create_padding(padding_strategy)
         self.cycles = cycles.values()
+        lengths = []
         for cycle_index, cycle_path in cycles.items():
             cur_cycle = read_htr_selex_cycle(cycle_path)
-            cur_label = np.zeros((self.num_cycles, 1), dtype=np.float32)
-            cur_label[:cycle_index] = 1
+            # cur_label = np.zeros(self.num_cycles, dtype=np.float32)
+            # cur_label[:cycle_index] = 1
+            cur_label = cycle_index
+            lengths.append(len(cur_cycle))
             for cur_rna in cur_cycle:
                 encoded = self.encoder.encode_rna(cur_rna)
                 self.x.append(encoded)
                 self.y.append(cur_label)
-
+        mean_cycle_len = int(np.mean(lengths))
+        zero_lists = [[0] * self.encoder.max_len for _ in range(mean_cycle_len)]
+        self.x += zero_lists
+        self.y += [0] * mean_cycle_len
         self.x = torch.from_numpy(np.array(self.x, dtype=np.int64))
-        self.y = torch.from_numpy(np.squeeze(np.array(self.y), axis=-1))
+        self.y = torch.from_numpy(np.array(self.y, dtype=np.int64))
 
-    def create_padding(padding_strategy: str):
-        if padding_strategy == 'zeros':
-            return list('P' * 40)
+    # def create_padding(padding_strategy: str):
+    #     if padding_strategy == 'zeros':
+    #         return list('P' * 40)
+
+    def generate_random_sequence(self):
+        length = random.randint(31, self.encoder.max_len)
+        sequence = ''.join(random.choices('ACGT', k=length))
+        return self.encoder.encode_rna(sequence)
 
     def __getitem__(self, index) -> T_co:
-        return self.x[index], self.y[index]
+        label = self.y[index]
+        if label == 0:
+            rna = self.generate_random_sequence()
+            rna = torch.from_numpy(np.array(rna, dtype=np.int64))
+        else:
+            rna = self.x[index]
+        return rna, label
 
     def __len__(self):
         return len(self.y)

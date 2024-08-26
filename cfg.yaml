@@ -1,8 +1,10 @@
-val_ratio: 0.2
+val_ratio: 0.4
 batch_size: 64
-learning_rate: 0.002
-embed_dim: 16
+learning_rate: 0.01
+embed_dim: 5
 kernel_size: 5
-num_kernels: 32
+feature_dim: 128
 device: ""
-skip_exist: true
+skip_exist: false
+num_epochs: 5
+optimizer: "adam"
