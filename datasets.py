@@ -42,11 +42,17 @@ class HtrSelexDataset(Dataset):
         # self.pad_data = self.create_padding(padding_strategy)
         self.cycles = cycles.values()
         lengths = []
+        def cycle_to_class_index(cycle_index):
+            if cycle_index <= 1:
+                return 0
+            return cycle_index - 1
+        self.all_labels = set()
         for cycle_index, cycle_path in cycles.items():
             cur_cycle = read_htr_selex_cycle(cycle_path)
             # cur_label = np.zeros(self.num_cycles, dtype=np.float32)
             # cur_label[:cycle_index] = 1
-            cur_label = cycle_index
+            cur_label = cycle_to_class_index(cycle_index)
+            self.all_labels.add(cur_label)
             lengths.append(len(cur_cycle))
             for cur_rna in cur_cycle:
                 encoded = self.encoder.encode_rna(cur_rna)
@@ -58,7 +64,7 @@ class HtrSelexDataset(Dataset):
         self.y += [0] * mean_cycle_len
         self.x = torch.from_numpy(np.array(self.x, dtype=np.int64))
         self.y = torch.from_numpy(np.array(self.y, dtype=np.int64))
-
+        self.num_classes = len(self.all_labels)
     # def create_padding(padding_strategy: str):
     #     if padding_strategy == 'zeros':
     #         return list('P' * 40)
@@ -70,7 +76,7 @@ class HtrSelexDataset(Dataset):
 
     def __getitem__(self, index) -> T_co:
         label = self.y[index]
-        if label == 0:
+        if label == 0 and (torch.all(self.x[index] == 0)):
             rna = self.generate_random_sequence()
             rna = torch.from_numpy(np.array(rna, dtype=np.int64))
         else:
@@ -90,6 +96,14 @@ class HtrSelexDataset(Dataset):
     @property
     def num_cycles(self):
         return len(self.cycles)
+
+    @property
+    def num_classes(self):
+        return self._num_classes
+
+    @num_classes.setter
+    def num_classes(self, value):
+        self._num_classes = value
 
 
 class SimpleRnaDataset(Dataset):

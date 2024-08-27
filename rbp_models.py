@@ -41,7 +41,7 @@ class RbpPredictor(ABC):
 
     def model_output(self, encoded_rna: torch.Tensor):
         with torch.no_grad():
-            model_out = (self.model(encoded_rna)).cpu().numpy()
+            model_out = self.model(encoded_rna).cpu().numpy()
         return model_out
 
     def predict_loader(self, loader: DataLoader, device):
@@ -56,18 +56,20 @@ class RbpEncoder(Module):
         # pad_size = (kernel_size - 1) // 2
         pool_size = 3
         self.input_size = max_rna_size
-        # self.embeding = nn.Embedding(5, embed_dim)  # ACGT + Unknown
-        self.conv1 = nn.Conv1d(in_channels=embed_dim, out_channels=64,
+        self.embeding = nn.Embedding(5, embed_dim)  # ACGT + Unknown
+        self.conv1 = nn.Conv1d(in_channels=embed_dim, out_channels=128,
                                kernel_size=kernel_size, padding='same')
         self.relu1 = nn.ReLU()
-        self.bn1 = nn.BatchNorm1d(64)
-        self.dropout1 = nn.Dropout1d(0.03)
-        self.conv2 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=kernel_size,
+        self.bn1 = nn.BatchNorm1d(128)
+        # self.dropout1 = nn.Dropout1d(0.03)
+        self.dim_reduce = nn.Conv1d(in_channels=128, out_channels=16, kernel_size=1,
                                padding='same')
+        self.conv2 = nn.Conv1d(in_channels=16, out_channels=num_kernels, kernel_size=kernel_size,
+                                padding='same')
         self.relu2 = nn.ReLU()
-        self.bn2 = nn.BatchNorm1d(128)
-        self.dropout2 = nn.Dropout1d(0.03)
-        # self.pool1 = nn.MaxPool1d(kernel_size=pool_size)
+        self.bn2 = nn.BatchNorm1d(num_kernels)
+        # self.dropout2 = nn.Dropout1d(0.03)
+        self.pool1 = nn.MaxPool1d(kernel_size=pool_size)
         # self.pool2 = nn.AvgPool1d(kernel_size=pool_size)
         # self.linear = nn.Linear(256, num_kernels)
 
@@ -89,7 +91,7 @@ class RbpEncoder(Module):
         # self.sequence = nn.TransformerEncoder(encoder_layer=encoder_layer, num_layers=4)
         # self.cls_token = nn.Parameter(torch.randn(1, num_kernels))
 
-        self.sequence = nn.LSTM(input_size=128, hidden_size=num_kernels // 2,
+        self.sequence = nn.LSTM(input_size=num_kernels, hidden_size=num_kernels // 2,
                                 bidirectional=True, batch_first=True)
 
     # def activate_gate(self, features):
@@ -109,23 +111,25 @@ class RbpEncoder(Module):
     #     return features, (gate_vals1, gate_vals2, gate_vals3, gate_vals4, gate_vals5)
 
     def forward(self, x):
-        # embed = self.embeding(x)
-        embed = F.one_hot(x, 5).to(x.device).to(torch.float32)
+        embed = self.embeding(x)
+        # embed = F.one_hot(x, 5).to(x.device).to(torch.float32)
         embed = embed.transpose(1, 2)
         x1 = self.conv1(embed)
         x1 = self.relu1(x1)
         x1 = self.bn1(x1)
-        # p1 = self.pool1(x1)
-        # p2 = self.pool2(x1)
-        # features = torch.concat([p1, p2], dim=1).transpose(1, 2)
-        # x1 = self.dropout1(x1)
+        # x1 = self.pool1(x1)
+        # # p2 = self.pool2(x1)
+        # # features = torch.concat([p1, p2], dim=1).transpose(1, 2)
+        # # x1 = self.dropout1(x1)
+        x1 = self.dim_reduce(x1)
         x1 = self.conv2(x1)
         x1 = self.relu2(x1)
         x1 = self.bn2(x1)
-        # x1 = self.dropout2(x1)
-        #features = self.pool(x1)
-        features = x1
+        # # x1 = self.dropout2(x1)
+        features = self.pool1(x1)
+        # # features = x1
         features = features.transpose(1, 2)
+        # features = features.flatten(1, -1)
         # features = self.to_feature(embed)
         # features, gate = self.activate_gate(features)
         # features += self.pos_embedding
@@ -135,8 +139,8 @@ class RbpEncoder(Module):
         # cls_output = out_tokens[:, 0, :]
 
         _, (cls_output, _) = self.sequence(features)
-        # cls_output = out_tokens[:, -1, :]
-        #cls_output = self.relu2(self.linear(features))
+        # # cls_output = out_tokens[:, -1, :]
+        # #cls_output = self.relu2(self.linear(features))
         cls_output = torch.concat([cls_output[0], cls_output[1]], dim=-1)
         return cls_output  # .squeeze()
 
@@ -253,9 +257,14 @@ class RbpClassifier(Module):
     def __init__(self, encoder, encoder_dim, num_classes):
         super().__init__()
         self.encoder = encoder
-        self.class_head = nn.Linear(encoder_dim, 1)
+        self.class_head = nn.Linear(encoder_dim, num_classes)
+        # self.class_head = nn.Sequential(nn.Linear(128, 1),
+        #                                 nn.ReLU(),
+        #                                 nn.Linear(8, 1),
+        #                                 )
+
         self.activation = nn.Identity()
-        self.num_classes = 1
+        self.num_classes = num_classes
 
     def forward(self, x):
         features = self.encoder(x)
@@ -267,10 +276,10 @@ class RbpClassifier(Module):
 class RbpClassifierLoss(Module):
     def __init__(self):
         super().__init__()
-        self.bce = nn.BCEWithLogitsLoss()
+        self.bce = nn.CrossEntropyLoss()
 
     def forward(self, input, target):
-        target = (target > 1).to(torch.float32)
+        # target = (target > 1).to(torch.float32)
         return self.bce(input.squeeze(-1), target)
 
 
@@ -283,14 +292,15 @@ class RbpClassifierPredictor(RbpPredictor):
         # max_index = np.argmax(model_out, axis=-1)
         # max_conf = model_out[np.arange(0, model_out.shape[0]), max_index]
         # res = max_conf * (max_index + 1)
-        return model_out
+        return 1 - model_out[:, 0]
         # return np.dot(model_out, self.scores)
 
     def model_output(self, encoded_rna: torch.Tensor):
         with torch.no_grad():
-            model_out = F.sigmoid(self.model(encoded_rna))
+            model_out = F.softmax(self.model(encoded_rna), dim=-1)
         model_out = model_out.cpu().numpy()
         return model_out
+
 
 class GatedPredictor(RbpPredictor):
     def __init__(self, predictor: RbpPredictor):

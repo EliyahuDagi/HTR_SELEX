@@ -20,6 +20,7 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=10,
     best_loss = sys.float_info.max
     writer = SummaryWriter(os.path.join(train_dir, 'tensorboard'))
     count_no_progress = 0
+    stop = False
     for epoch in tqdm(range(num_epochs), desc='Training epochs'):
         # Each epoch has a training and validation phase
         for phase in ['train', 'val']:
@@ -63,7 +64,7 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=10,
                         else:
                             optimizer.step()
                         if schedular is not None:
-                            schedular.step(best_loss)
+                            schedular.step()
                 # statistics
                 running_loss += loss.item() * inputs.size(0)
                 # running_corrects += torch.sum(preds == labels.data)
@@ -83,11 +84,14 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=10,
                     torch.save(best_model_wts, os.path.join(train_dir, f'{model_name}.pth'))
                 else:
                     count_no_progress += 1
-            if phase == 'val':
                 val_loss_history.append(best_loss)
-            if count_no_progress == 3:
+                # if schedular is not None:
+                #     schedular.step()
+            if count_no_progress == 1:
                 print(f'stopped due to {count_no_progress} with no progress')
-                break
+                stop = True
+        if stop:
+            break
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))

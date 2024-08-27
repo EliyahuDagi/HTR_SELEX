@@ -1,7 +1,6 @@
 import os
 from typing import List, Dict
 from collections import OrderedDict
-
 import numpy as np
 from torch.utils.data import Dataset, random_split, DataLoader
 from torch.optim import Adam
@@ -10,9 +9,9 @@ from rbp_models import RbpEncoder, RbpPredictor, \
     RbpOrdinalClassifier, OrdinalLoss, RbpOrdinalPredictor, \
     RbpVAE, VAELoss, TypicalityPredictor, MeanVarianceLoss, \
     GatedLoss, GatedPredictor
+from balanced_sampler import BalancedSampler
 import torch
 from sam import SAM
-import torch.nn as nn
 import yaml
 
 
@@ -58,7 +57,7 @@ def create_model(cfg, dataset, device):
         # criterion = OrdinalLoss()
         # model = RbpGatedClassifier(41, embed_dim, feature_dim=num_kernels, num_classes=2)
         # encoder = RbpEncoder(41, embed_dim=embed_dim, kernel_size=kernel_size, num_kernels=num_kernels, device=device)
-        model = RbpClassifier(encoder=encoder, encoder_dim=num_kernels, num_classes=dataset.num_cycles)
+        model = RbpClassifier(encoder=encoder, encoder_dim=num_kernels, num_classes=dataset.num_classes)
         criterion = RbpClassifierLoss()
         # criterion = GatedLoss(main_loss=criterion)
     else:
@@ -85,7 +84,12 @@ def create_loaders(cfg, dataset: Dataset):
     val_len = int(dataset_len * (1 - val_ratio))
     train_len = dataset_len - val_len
     train_dataset, val_datasets = random_split(dataset, [train_len, val_len])
-    train_loader = DataLoader(train_dataset, cfg['batch_size'], shuffle=True)
+    train_labels = train_dataset.dataset.y[train_dataset.indices]
+    batch_sampler = BalancedSampler(labels=train_labels.numpy(),
+                                    batch_size=cfg['batch_size'],
+                                    num_class_in_batch=dataset.num_classes,
+                                    seed=1)
+    train_loader = DataLoader(train_dataset, batch_sampler=batch_sampler)
     val_loader = DataLoader(val_datasets, cfg['batch_size'] * 2, shuffle=False)
     return {'train': train_loader,
             'val': val_loader}

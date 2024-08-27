@@ -4,7 +4,7 @@ from utils import parse_htr_selex_dir, parse_RNAcompete_intensities_dir,\
     create_model, create_loaders, read_cfg, \
     create_optimizer, get_device, create_predictor, dataset_to_loader, pearson_correlation
 from train_model import train_model
-from torch.optim.lr_scheduler import CyclicLR
+from torch.optim.lr_scheduler import CyclicLR, StepLR
 import os
 import torch
 
@@ -33,7 +33,8 @@ if __name__ == '__main__':
         schedular = CyclicLR(optimizer=optimizer, base_lr=0.00001, max_lr=0.1, step_size_up=len(loaders['train']),
                              mode='triangular',
                              cycle_momentum=False)
-        # schedular = None
+
+        # schedular = StepLR(optimizer, step_size=1, gamma=0.1)
         model_out_path = os.path.join('models', model_name, f'{model_name}.pth')
         if cfg['skip_exist'] and os.path.exists(model_out_path):
             model.load_state_dict(torch.load(model_out_path, map_location=device))
