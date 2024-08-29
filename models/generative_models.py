@@ -3,7 +3,6 @@ from models.interfaces import RbpPredictor, ModelTypeFactory
 from models.encoder import RbpEncoder
 from torch.nn import Module
 import torch.nn as nn
-import torch.functional as F
 import torch
 import numpy as np
 
@@ -15,19 +14,18 @@ def generate_square_subsequent_mask(size):
 
 
 class RbpVAE(Module):
-    def __init__(self, encoder, encoder_dim, max_rna_length=49):
+    def __init__(self, encoder: RbpEncoder, encoder_dim: int, max_rna_length=49):
         super().__init__()
         self.encoder = encoder
         self.fc_mu = nn.Linear(encoder_dim, encoder_dim)
         self.fc_logvar = nn.Linear(encoder_dim, encoder_dim)
 
-        self.decoder_embedding = nn.Embedding(6, encoder_dim)  # ACGT + Padding + Unknown
+        self.decoder_embedding = encoder.embedding
         decoder_layer = nn.TransformerDecoderLayer(encoder_dim, 4, dim_feedforward=128, batch_first=True)
         self.decoder = nn.TransformerDecoder(decoder_layer, 4)
         self.start_token = nn.Parameter(torch.randn(encoder_dim))
         self.positional_encoding = nn.Parameter(torch.randn(max_rna_length, encoder_dim))
-        self.out_to_class = nn.Linear(encoder_dim, 5)
-
+        self.out_to_class = nn.Linear(encoder_dim, 4)
         self.bce = nn.CrossEntropyLoss(ignore_index=0, reduction='none')
 
     def mu_log_var(self, features):
@@ -90,8 +88,8 @@ class VAELoss(Module):
 
 
 class LikelihoodPredictor(RbpPredictor):
-    def __init__(self, model: RbpVAE):
-        super().__init__(model)
+    def __init__(self, model: RbpVAE, device):
+        super().__init__(model, device)
 
     def predict(self, encoded_rna: torch.Tensor) -> np.ndarray:
         with torch.no_grad():
@@ -118,4 +116,4 @@ class LikelihoodFactory(ModelTypeFactory):
         return VAELoss()
 
     def create_predictor(self, model):
-        return LikelihoodPredictor(model)
+        return LikelihoodPredictor(model, self.device)

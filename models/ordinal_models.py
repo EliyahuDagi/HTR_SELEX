@@ -49,8 +49,8 @@ class OrdinalLoss(Module):
 
 
 class RbpOrdinalPredictor(RbpPredictor):
-    def __init__(self, model: RbpOrdinalClassifier):
-        super().__init__(model)
+    def __init__(self, model: RbpOrdinalClassifier, device):
+        super().__init__(model, device)
         self.scores = np.arange(1, model.num_classes + 1)
 
     def _predict(self, model_out) -> np.ndarray:
@@ -75,4 +75,4 @@ class OrdinalFactory(ModelTypeFactory):
         return OrdinalLoss()
 
     def create_predictor(self, model):
-        return RbpOrdinalPredictor(model)
+        return RbpOrdinalPredictor(model, self.device)

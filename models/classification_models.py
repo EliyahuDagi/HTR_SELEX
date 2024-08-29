@@ -2,7 +2,6 @@ from models.interfaces import RbpPredictor, ModelTypeFactory
 from models.encoder import RbpEncoder
 from torch.nn import Module
 import torch.nn as nn
-import torch.nn.functional as F
 import torch
 import numpy as np
 
@@ -39,8 +38,8 @@ class RbpClassifierLoss(Module):
 
 
 class RbpClassifierPredictor(RbpPredictor):
-    def __init__(self, model: RbpClassifier):
-        super().__init__(model)
+    def __init__(self, model: RbpClassifier, device):
+        super().__init__(model, device)
         # self.scores = np.arange(1, model.num_classes + 1)
 
     def _predict(self, model_out) -> np.ndarray:
@@ -48,7 +47,7 @@ class RbpClassifierPredictor(RbpPredictor):
 
     def model_output(self, encoded_rna: torch.Tensor):
         with torch.no_grad():
-            model_out = F.sigmoid(self.model(encoded_rna))
+            model_out = torch.sigmoid(self.model(encoded_rna))
         model_out = model_out.cpu().numpy()
         return model_out
 
@@ -71,4 +70,4 @@ class ClassifierFactory(ModelTypeFactory):
         return RbpClassifierLoss(self.num_classes)
 
     def create_predictor(self, model):
-        return RbpClassifierPredictor(model)
+        return RbpClassifierPredictor(model, self.device)

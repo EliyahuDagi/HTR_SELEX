@@ -31,7 +31,7 @@ def run_full_train_step(dataset, model_name, cfg):
     model_out_path = os.path.join(model_out_dir, f'{model_name}.pth')
 
     if cfg['skip_exist'] and os.path.exists(model_out_path):
-        model.load_state_dict(torch.load(model_out_path, map_location=device))
+        model.load_state_dict(torch.load(model_out_path, map_location=device), strict=False)
     else:
         model, _ = train_model(model, dataloaders=loaders, criterion=criterion,
                                optimizer=optimizer, device=device,

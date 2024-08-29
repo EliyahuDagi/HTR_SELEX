@@ -6,12 +6,12 @@ import numpy as np
 from tqdm import tqdm
 
 
-
 # predicts binding intensity using trained model
 class RbpPredictor(ABC):
 
-    def __init__(self, model: nn.Module):
+    def __init__(self, model: nn.Module, device):
         self.model = model.eval()
+        self.device = device
 
     def _predict(self, model_out) -> np.ndarray:
         pass
@@ -26,7 +26,7 @@ class RbpPredictor(ABC):
         return model_out
 
     def predict_loader(self, loader: DataLoader):
-        results = [self.predict(batch.to(self.model.device)) for batch in tqdm(loader, desc='run on rna compete data')]
+        results = [self.predict(batch.to(self.device)) for batch in tqdm(loader, desc='run on rna compete data')]
         return np.squeeze(np.concatenate(results, axis=0))
 
 

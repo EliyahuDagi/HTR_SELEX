@@ -9,12 +9,11 @@ import copy
 
 def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=10, schedular=None, model_name='',
                 two_step_optimizer=False):
-    train_dir = os.path.join('models', model_name)
+    train_dir = os.path.join('results', model_name)
     since = time.time()
     val_loss_history = []
     best_model_wts = copy.deepcopy(model.state_dict())
     best_loss = sys.float_info.max
-    writer = SummaryWriter(os.path.join(train_dir, 'tensorboard'))
     count_no_progress = 0
     stop = False
     for epoch in tqdm(range(num_epochs), desc='Training epochs'):
@@ -58,9 +57,6 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=10,
                 count += inputs.size(0)
             epoch_loss = running_loss / len(dataloaders[phase].dataset)
 
-            writer.add_scalar(f'Loss/{phase.title()}', epoch_loss, epoch)
-            print('{} Loss: {:.4f}'.format(phase, epoch_loss))
-
             # deep copy the model
             if phase == 'val':
                 if epoch_loss < best_loss:
@@ -72,7 +68,7 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=10,
                 val_loss_history.append(best_loss)
                 # if schedular is not None:
                 #     schedular.step()
-            if count_no_progress == 2:
+            if count_no_progress == 1:
                 print(f'stopped due to {count_no_progress} with no progress')
                 stop = True
         if stop:
