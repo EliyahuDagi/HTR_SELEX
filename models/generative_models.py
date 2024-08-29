@@ -1,5 +1,5 @@
-from encoder import RbpEncoder
-from models.model_type_factory import RbpPredictor, ModelTypeFactory
+from models.encoder import RbpEncoder
+from models.interfaces import RbpPredictor, ModelTypeFactory
 from models.encoder import RbpEncoder
 from torch.nn import Module
 import torch.nn as nn

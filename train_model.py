@@ -2,10 +2,6 @@ import os
 import sys
 import time
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import torchvision
-from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import copy
@@ -37,11 +33,6 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=10,
             for inputs, labels in pbar:
                 pbar.set_postfix_str(f'{phase}: Loss=>{running_loss / count}')
                 inputs = inputs.to(device)
-                if phase == 'train':
-                    random_cols = torch.randint(0, inputs.size(1), (inputs.size(0),))
-                    mask = torch.zeros(inputs.size(), dtype=torch.bool)
-                    mask[torch.arange(inputs.size(0)), random_cols] = True
-                    inputs[mask] = torch.randint(1, 5, (inputs.size(0), 1)).squeeze().to(inputs.device)
                 labels = labels.to(device)
                 # zero the parameter gradients
                 optimizer.zero_grad()
@@ -51,9 +42,6 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=10,
                     # Get model outputs and calculate loss
                     outputs = model(inputs)
                     loss = criterion(outputs, labels)
-
-                    # _, preds = torch.max(outputs, 1)
-
                     # backward + optimize only if in training phase
                     if phase == 'train':
                         loss.backward()
@@ -67,13 +55,10 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=10,
                             schedular.step()
                 # statistics
                 running_loss += loss.item() * inputs.size(0)
-                # running_corrects += torch.sum(preds == labels.data)
                 count += inputs.size(0)
             epoch_loss = running_loss / len(dataloaders[phase].dataset)
-            # epoch_acc = running_corrects.double() / len(dataloaders[phase].dataset)
-            # epoch_acc = 0
+
             writer.add_scalar(f'Loss/{phase.title()}', epoch_loss, epoch)
-            # writer.add_scalar(f'Accuracy/{phase.title()}', epoch_acc, epoch)
             print('{} Loss: {:.4f}'.format(phase, epoch_loss))
 
             # deep copy the model
@@ -87,7 +72,7 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=10,
                 val_loss_history.append(best_loss)
                 # if schedular is not None:
                 #     schedular.step()
-            if count_no_progress == 1:
+            if count_no_progress == 2:
                 print(f'stopped due to {count_no_progress} with no progress')
                 stop = True
         if stop:

@@ -3,15 +3,8 @@ from typing import List, Dict
 from collections import OrderedDict
 import numpy as np
 from torch.utils.data import Dataset, random_split, DataLoader
-from torch.optim import Adam
-from rbp_models import RbpEncoder, RbpPredictor, \
-    RbpClassifier, RbpClassifierLoss, RbpClassifierPredictor,\
-    RbpOrdinalClassifier, OrdinalLoss, RbpOrdinalPredictor, \
-    RbpVAE, VAELoss, TypicalityPredictor, MeanVarianceLoss, \
-    GatedLoss, GatedPredictor
 from balanced_sampler import BalancedSampler
 import torch
-from sam import SAM
 import yaml
 
 
@@ -45,37 +38,6 @@ def read_htr_selex_cycle(cycle_path) -> List[str]:
     res = [line.split(',')[0] for line in all_text]
     res = list(filter(len, res))
     return res
-
-
-def create_model(cfg, dataset, device):
-    embed_dim = cfg['embed_dim']
-    kernel_size = cfg['kernel_size']
-    num_kernels = cfg['feature_dim']
-    if dataset.num_cycles > 1:
-        encoder = RbpEncoder(41, embed_dim=embed_dim, kernel_size=kernel_size, num_kernels=num_kernels, device=device)
-        # model = RbpOrdinalClassifier(encoder=encoder, encoder_dim=num_kernels, num_class=dataset.num_cycles)
-        # criterion = OrdinalLoss()
-        # model = RbpGatedClassifier(41, embed_dim, feature_dim=num_kernels, num_classes=2)
-        # encoder = RbpEncoder(41, embed_dim=embed_dim, kernel_size=kernel_size, num_kernels=num_kernels, device=device)
-        model = RbpClassifier(encoder=encoder, encoder_dim=num_kernels, num_classes=dataset.num_classes)
-        criterion = RbpClassifierLoss()
-        # criterion = GatedLoss(main_loss=criterion)
-    else:
-        encoder = RbpEncoder(41, embed_dim=embed_dim, kernel_size=kernel_size, num_kernels=num_kernels, device=device)
-        model = RbpVAE(encoder=encoder, encoder_dim=num_kernels)
-        criterion = VAELoss()
-    return model.to(device), criterion
-
-
-def create_predictor(num_classes, model, loaders, device) -> RbpPredictor:
-    predictor = None
-    if num_classes > 1:
-        # predictor = RbpOrdinalPredictor(model)
-        predictor = RbpClassifierPredictor(model)
-        # predictor = GatedPredictor(predictor)
-    else:
-        predictor = TypicalityPredictor(model, train_loader=loaders['train'], device=device)
-    return predictor
 
 
 def create_loaders(cfg, dataset: Dataset):
@@ -114,15 +76,6 @@ def read_cfg(cfg_path):
     with open(cfg_path, 'r') as f:
         cfg = yaml.safe_load(f)
     return cfg
-
-
-def create_optimizer(cfg, model):
-    if cfg['optimizer'] == 'sam':
-        base_optimizer = torch.optim.SGD  # define an optimizer for the "sharpness-aware" update
-        optimizer = SAM(model.parameters(), base_optimizer, lr=cfg['learning_rate'], momentum=0.9)
-    else:
-        optimizer = Adam(model.parameters(), lr=cfg['learning_rate'])
-    return optimizer
 
 
 def dataset_to_loader(dataset: Dataset, cfg: Dict, **kwargs) -> DataLoader:

@@ -11,17 +11,11 @@ class RnaEncoder:
     def __init__(self):
         self.rna_char2class_map = dict(zip(list('NACGT'), list(range(5))))  # 'Add N for padding and unknown'
         self.max_len = 41
+        self.pad_min_len = 8
 
     def pad(self, rna):
-        if len(rna) > self.max_len:
-            print(len(rna))
-        if len(rna) == self.max_len:
-            return rna
         pad_len = self.max_len - len(rna)
-        # pad_before = pad_len // 2
-        # pad_after = pad_len - pad_before
-        # return 'P' * pad_before + rna + 'P' * pad_after
-        return rna + 'N' * pad_len
+        return 'NNNN' + rna + 'NNNN' + 'N' * pad_len
 
     def encode_single_unit(self, single_unit):
         return self.rna_char2class_map[single_unit]
@@ -33,46 +27,42 @@ class RnaEncoder:
 
 
 class HtrSelexDataset(Dataset):
-    def __init__(self, cycles: Dict[int, str], padding_strategy: str = 'zeros'):
+    def __init__(self, cycles: Dict[int, str]):
         super().__init__()
         self.encoder = RnaEncoder()
         self.x = []
         self.y = []
         self.cycles = []
-        # self.pad_data = self.create_padding(padding_strategy)
-        self.cycles = cycles.values()
-        lengths = []
-        def cycle_to_class_index(cycle_index):
-            if cycle_index <= 1:
-                return 0
-            return cycle_index - 1
-        self.all_labels = set()
+        self.num_cycles = len(cycles)
         for cycle_index, cycle_path in cycles.items():
             cur_cycle = read_htr_selex_cycle(cycle_path)
-            # cur_label = np.zeros(self.num_cycles, dtype=np.float32)
-            # cur_label[:cycle_index] = 1
-            cur_label = cycle_to_class_index(cycle_index)
-            self.all_labels.add(cur_label)
-            lengths.append(len(cur_cycle))
+            cur_label = cycle_index
             for cur_rna in cur_cycle:
                 encoded = self.encoder.encode_rna(cur_rna)
                 self.x.append(encoded)
                 self.y.append(cur_label)
-        mean_cycle_len = int(np.mean(lengths))
-        zero_lists = [[0] * self.encoder.max_len for _ in range(mean_cycle_len)]
-        self.x += zero_lists
-        self.y += [0] * mean_cycle_len
+
         self.x = torch.from_numpy(np.array(self.x, dtype=np.int64))
         self.y = torch.from_numpy(np.array(self.y, dtype=np.int64))
-        self.num_classes = len(self.all_labels)
-    # def create_padding(padding_strategy: str):
-    #     if padding_strategy == 'zeros':
-    #         return list('P' * 40)
 
     def generate_random_sequence(self):
         length = random.randint(31, self.encoder.max_len)
         sequence = ''.join(random.choices('ACGT', k=length))
         return self.encoder.encode_rna(sequence)
+
+    def add_random_samples(self):
+        _, counts = np.unique(self.y.numpy(), return_counts=True)
+        mean_cycle_len = int(np.mean(counts))
+        seq_size = self.encoder.max_len + self.encoder.pad_min_len
+        zero_lists = [[0] * seq_size for _ in range(mean_cycle_len)]
+        self.x = torch.concat([self.x, torch.from_numpy(np.array(zero_lists, np.int64))])
+        self.y = torch.concat([self.y, torch.from_numpy(np.array([0] * mean_cycle_len))])
+
+    def map_labels(self, mapping):
+        self.y = torch.tensor([mapping[val.item()] for val in self.y])
+        mask = self.y >= 0
+        self.x = self.x[mask]
+        self.y = self.y[mask]
 
     def __getitem__(self, index) -> T_co:
         label = self.y[index]
@@ -85,21 +75,18 @@ class HtrSelexDataset(Dataset):
 
     def __len__(self):
         return len(self.y)
-    @property
-    def cycles(self):
-        return self._cycles
-
-    @cycles.setter
-    def cycles(self, value):
-        self._cycles = value
 
     @property
     def num_cycles(self):
-        return len(self.cycles)
+        return self._num_cycles
+
+    @num_cycles.setter
+    def num_cycles(self, value):
+        self._num_cycles = value
 
     @property
     def num_classes(self):
-        return self._num_classes
+        return len(np.unique(self.y.numpy()))
 
     @num_classes.setter
     def num_classes(self, value):
