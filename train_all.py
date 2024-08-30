@@ -48,8 +48,8 @@ def run_full_train(dataset, model_name, cfg, model_out_dir):
                                max_no_progress=max_no_progress)
         # Second iteration - distinguish low cycles from high cycles
         dataset = orig_dataset
-        has_first_cycle = 1 in rbp_data.keys()
-        has_second_cycle = 2 in rbp_data.keys()
+        has_first_cycle = 1 in dataset.cycles
+        has_second_cycle = 2 in dataset.cycles
         second_iter = dataset.num_cycles > 1 and (has_first_cycle or has_second_cycle)
         if second_iter:
             # distinguish between low cycles and high cycles

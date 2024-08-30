@@ -2,7 +2,6 @@ import os
 import sys
 import time
 import torch
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import copy
 

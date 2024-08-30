@@ -46,8 +46,7 @@ class HtrSelexDataset(Dataset):
         self.encoder = RnaEncoder()
         self.x = []
         self.y = []
-        self.cycles = []
-        self.num_cycles = len(cycles)
+        self.cycles = list(cycles.keys())
         for cycle_index, cycle_path in cycles.items():
             cur_cycle = read_htr_selex_cycle(cycle_path)
             cur_label = cycle_index
@@ -92,19 +91,11 @@ class HtrSelexDataset(Dataset):
 
     @property
     def num_cycles(self):
-        return self._num_cycles
-
-    @num_cycles.setter
-    def num_cycles(self, value):
-        self._num_cycles = value
+        return len(self.cycles)
 
     @property
     def num_classes(self):
         return len(np.unique(self.y.numpy()))
-
-    @num_classes.setter
-    def num_classes(self, value):
-        self._num_classes = value
 
 
 class SimpleRnaDataset(Dataset):
