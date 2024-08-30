@@ -7,8 +7,9 @@ import copy
 
 
 def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=10, schedular=None, model_name='',
-                two_step_optimizer=False, max_no_progress=1):
-    train_dir = os.path.join('results', model_name)
+                two_step_optimizer=False, max_no_progress=1, train_dir=''):
+    if not train_dir:
+        train_dir = os.path.join('results', model_name)
     since = time.time()
     val_loss_history = []
     best_model_wts = copy.deepcopy(model.state_dict())

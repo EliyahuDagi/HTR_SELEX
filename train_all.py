@@ -45,7 +45,7 @@ def run_full_train(dataset, model_name, cfg, model_out_dir):
                                optimizer=optimizer, device=device,
                                num_epochs=cfg['num_epochs'], model_name=model_name,
                                schedular=schedular, two_step_optimizer=cfg['optimizer'] == 'sam',
-                               max_no_progress=max_no_progress)
+                               max_no_progress=max_no_progress, train_dir=model_out_dir)
         # Second iteration - distinguish low cycles from high cycles
         dataset = orig_dataset
         has_first_cycle = 1 in dataset.cycles
@@ -66,7 +66,7 @@ def run_full_train(dataset, model_name, cfg, model_out_dir):
                                    optimizer=optimizer, device=device,
                                    num_epochs=cfg['num_epochs'], model_name=model_name,
                                    schedular=schedular, two_step_optimizer=cfg['optimizer'] == 'sam',
-                                   max_no_progress=1)
+                                   max_no_progress=1, train_dir=model_out_dir)
     predictor = factory.create_predictor(model)
     return predictor
 
