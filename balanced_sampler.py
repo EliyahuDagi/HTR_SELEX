@@ -7,6 +7,9 @@ from torch.utils.data.sampler import T_co
 
 
 class BalancedSampler(Sampler):
+    """
+    Sample batch with is balanced in amount of each class inside the batch
+    """
     def __init__(self, labels: np.ndarray, batch_size, num_class_in_batch, seed):
         super().__init__(None)
         self.labels = labels
