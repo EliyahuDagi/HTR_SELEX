@@ -8,6 +8,16 @@ from utils import parse_htr_selex_dir, read_htr_selex_cycle, read_rna_compete_rn
 
 
 class RnaEncoder:
+    """
+    Encode rna string to number sequence
+    N -> 0 : unknown or padding
+    A -> 1
+    C -> 2
+    G -> 3
+    T -> 4
+    Padding
+    add 4 padding from left and right (prepare for 8 size convolution kernel and also pad at the end to max size
+    """
     def __init__(self):
         self.rna_char2class_map = dict(zip(list('NACGT'), list(range(5))))  # 'Add N for padding and unknown'
         self.max_len = 41
@@ -27,6 +37,10 @@ class RnaEncoder:
 
 
 class HtrSelexDataset(Dataset):
+    """
+    read rna string and encode each of ACGT to number
+    return numpy array of the encoded rna and also the cycle it belongs to
+    """
     def __init__(self, cycles: Dict[int, str]):
         super().__init__()
         self.encoder = RnaEncoder()
@@ -94,6 +108,10 @@ class HtrSelexDataset(Dataset):
 
 
 class SimpleRnaDataset(Dataset):
+    """
+    read rna string and encode each of ACGT to number
+    return numpy array of the encoded rna
+    """
     def __init__(self, rna_sequences: Union[str, List[str]]):
         if isinstance(rna_sequences, str):
             rna_sequences = read_rna_compete_rna_list(rna_sequences)

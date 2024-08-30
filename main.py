@@ -2,7 +2,7 @@ import os.path
 from typing import List, Dict
 import sys
 from datasets import SimpleRnaDataset
-from utils import htr_selex_info
+from utils import htr_selex_info, read_cfg
 from datasets import HtrSelexDataset
 from train_all import run_full_train, run_predict
 
@@ -28,12 +28,7 @@ def train_single(out_path: str, rna_compete_path: str, htr_selex_cycles: List[st
     model_name = f'RBP_{rbp_index}'
     model_out_dir = os.path.dirname(out_path)
     predictor = run_full_train(dataset, model_name, cfg, model_out_dir)
-    predicted = run_predict(out_path, model_name, predictor, cfg, rna_compete_dataset)
-
-    predictor = run_full_train(dataset, model_name, cfg)
-
-    out_path = os.path.join('results', model_name, model_name + '.txt')
-    predicted = run_predict(out_path, model_name, predictor, cfg, rna_compete_dataset)
+    run_predict(out_path, predictor, cfg, rna_compete_dataset)
 
 
 if __name__ == '__main__':
@@ -44,7 +39,8 @@ if __name__ == '__main__':
     rna_compete_path = sys.argv[2]
     selex_cycles = sys.argv[3:]
     cfg = read_cfg('cfg.yaml')
-    train_single(out_path==out_path, rna_compete_path=rna_compete_path, htr_selex_cycles=selex_cycles)
+    train_single(out_path=out_path, rna_compete_path=rna_compete_path,
+                 htr_selex_cycles=selex_cycles, cfg=cfg)
 
 
 

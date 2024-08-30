@@ -16,8 +16,14 @@ def run_full_train(dataset, model_name, cfg, model_out_dir):
     device = get_device(cfg)
     factory_type = cfg['factory_type']
     orig_dataset = copy.deepcopy(dataset)
+    # First iteration map all cycles to class 1
+    # and add random sequences as class 0
+
+    # map all cycles to class 1
     dataset.map_labels({1: 1, 2: 1, 3: 1, 4: 1})
+    # add random sequences as class 0
     dataset.add_random_samples()
+    # factory responible to create Model, loss, and predictor by config
     factory = create_factory(factory_type, cfg, dataset.num_classes, device)
     model = factory.create_model()
     criterion = factory.create_loss()
@@ -40,7 +46,7 @@ def run_full_train(dataset, model_name, cfg, model_out_dir):
                                num_epochs=cfg['num_epochs'], model_name=model_name,
                                schedular=schedular, two_step_optimizer=cfg['optimizer'] == 'sam',
                                max_no_progress=max_no_progress)
-
+        # Second iteration - distinguish low cycles from high cycles
         dataset = orig_dataset
         has_first_cycle = 1 in rbp_data.keys()
         has_second_cycle = 2 in rbp_data.keys()
@@ -51,10 +57,6 @@ def run_full_train(dataset, model_name, cfg, model_out_dir):
                 dataset.map_labels({1: 0, 2: -1, 3: 1, 4: 1})
             else:
                 dataset.map_labels({1: -1, 2: 0, 3: 1, 4: 1})
-            # if dataset.num_cycles == 1:
-            #     factory = create_factory(factory_type, cfg, dataset.num_classes, device)
-            #     model = factory.create_model(encoder=model.encoder)
-            #     criterion = factory.create_loss()
             loaders = create_loaders(cfg, dataset)
             optimizer = create_optimizer(cfg, model)
             schedular = CyclicLR(optimizer=optimizer, base_lr=0.00001, max_lr=0.1, step_size_up=len(loaders['train']),
