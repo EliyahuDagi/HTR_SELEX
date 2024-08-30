@@ -8,13 +8,17 @@ import torch
 import yaml
 
 
+def htr_selex_info(file_name: str):
+    file_name = os.path.splitext(file_name)[0]
+    seperator_index = file_name.index('_')
+    rbp_index = int(file_name[3: seperator_index])
+    rbp_cycle_index = int(file_name[seperator_index + 1:])
+    return rbp_index, rbp_cycle_index
+
 def parse_htr_selex_dir(root_path: str) -> List[Dict[int, str]]:
     res = dict()
     for file_path in os.listdir(root_path):
-        file_name = os.path.splitext(file_path)[0] # remove extension
-        seperator_index = file_name.index('_')
-        rbp_index = int(file_name[3: seperator_index])
-        rbp_cycle_index = int(file_name[seperator_index + 1:])
+        rbp_index, rbp_cycle_index = htr_selex_info(file_path)
         if rbp_index not in res:
             res[rbp_index] = dict()
         res[rbp_index][rbp_cycle_index] = os.path.join(root_path, file_path)

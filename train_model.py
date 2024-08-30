@@ -8,7 +8,7 @@ import copy
 
 
 def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=10, schedular=None, model_name='',
-                two_step_optimizer=False):
+                two_step_optimizer=False, max_no_progress=1):
     train_dir = os.path.join('results', model_name)
     since = time.time()
     val_loss_history = []
@@ -68,7 +68,7 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=10,
                 val_loss_history.append(best_loss)
                 # if schedular is not None:
                 #     schedular.step()
-            if count_no_progress == 1:
+            if count_no_progress == max_no_progress:
                 print(f'stopped due to {count_no_progress} with no progress')
                 stop = True
         if stop:

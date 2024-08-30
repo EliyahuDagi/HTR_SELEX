@@ -6,7 +6,35 @@ import torch.nn as nn
 import torch
 import numpy as np
 
+import torch
+import math
 
+
+class PositionalEncoding(torch.nn.Module):
+    def __init__(self, d_model, max_len=49):
+        super(PositionalEncoding, self).__init__()
+
+        # Create a matrix of [max_len, d_model] shape to hold the positional encodings
+        pe = torch.zeros(max_len, d_model)
+
+        # Position indices (0, 1, 2, ..., max_len-1)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+
+        # Divisor terms for different dimensions
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+
+        # Compute the positional encodings
+        pe[:, 0::2] = torch.sin(position * div_term)  # Apply sin to even indices in dimension
+        pe[:, 1::2] = torch.cos(position * div_term)  # Apply cos to odd indices in dimension
+
+        # Add a batch dimension and register as buffer so it’s not a parameter
+        pe = pe.unsqueeze(0)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        # Add the positional encoding to the input tensor
+        x = x + self.pe[:, :x.size(1), :]
+        return x
 def generate_square_subsequent_mask(size):
     mask = (torch.triu(torch.ones((size, size))) == 1)
     mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
@@ -20,12 +48,13 @@ class RbpVAE(Module):
         self.fc_mu = nn.Linear(encoder_dim, encoder_dim)
         self.fc_logvar = nn.Linear(encoder_dim, encoder_dim)
 
-        self.decoder_embedding = encoder.embedding
-        decoder_layer = nn.TransformerDecoderLayer(encoder_dim, 4, dim_feedforward=128, batch_first=True)
-        self.decoder = nn.TransformerDecoder(decoder_layer, 4)
+        self.decoder_embedding = nn.Embedding(5, encoder_dim)
+        decoder_layer = nn.TransformerDecoderLayer(encoder_dim, 4, dim_feedforward=128, batch_first=True, norm_first=True)
+        self.decoder = nn.TransformerDecoder(decoder_layer, 1)
         self.start_token = nn.Parameter(torch.randn(encoder_dim))
-        self.positional_encoding = nn.Parameter(torch.randn(max_rna_length, encoder_dim))
-        self.out_to_class = nn.Linear(encoder_dim, 4)
+        # self.positional_encoding = nn.Parameter(torch.randn(max_rna_length, encoder_dim))
+        self.positional_encoding = PositionalEncoding(encoder_dim, max_len=max_rna_length)
+        self.out_to_class = nn.Linear(encoder_dim, 5)
         self.bce = nn.CrossEntropyLoss(ignore_index=0, reduction='none')
 
     def mu_log_var(self, features):
@@ -51,10 +80,10 @@ class RbpVAE(Module):
         batch_start_token = self.start_token.repeat(x.size(0), 1)
         input_embedded = self.decoder_embedding(x[:, : -1])
         queries = torch.concat([batch_start_token.unsqueeze(1), input_embedded], dim=1)
-        queries = queries + self.positional_encoding
+        queries = self.positional_encoding(queries)
 
         mask, pad_mask = self.create_mask(x)
-        decoded_seq = self.decoder(queries, memory=z.unsqueeze(1)) #, tgt_mask=mask, tgt_key_padding_mask=pad_mask)
+        decoded_seq = self.decoder(queries, memory=z.unsqueeze(1), tgt_mask=mask)
         # Project to classification scores at each step
         output_seq = self.out_to_class(decoded_seq)
         return output_seq
@@ -67,7 +96,8 @@ class RbpVAE(Module):
 
     def likelihood(self, x):
         x, reconstruction, mu, log_var = self.__call__(x)
-        reconstruct_term = torch.sum(self.bce(reconstruction.view(-1, reconstruction.size(2)), x.view(-1)), dim=-1)
+        reconstruct_term = self.bce(reconstruction.view(-1, reconstruction.size(2)), x.view(-1))
+        reconstruct_term = torch.sum(reconstruct_term.view(x.size(0), -1), dim=-1)
         kl_term = torch.sum(-0.5 * (1 + log_var - (mu * mu) - torch.exp(log_var)), dim=1)
         elbo = -(reconstruct_term + kl_term)
         return elbo
@@ -81,7 +111,8 @@ class VAELoss(Module):
     def forward(self, vae_out, _):
         x, reconstruction, mu, log_var = vae_out
         # reconstruction = torch.softmax(reconstruction, dim=-1)
-        reconstruct_term = torch.sum(self.bce(reconstruction.view(-1, reconstruction.size(2)), x.view(-1)), dim=-1)
+        reconstruct_term = self.bce(reconstruction.view(-1, reconstruction.size(2)), x.view(-1))
+        reconstruct_term = torch.mean(reconstruct_term.view(x.size(0), -1), dim=-1)
         kl_term = torch.sum(-0.5 * (1 + log_var - (mu * mu) - torch.exp(log_var)), dim=1)
         loss = torch.mean(reconstruct_term + kl_term)
         return loss
